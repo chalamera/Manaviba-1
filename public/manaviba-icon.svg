@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 70 70">
+  <!-- 円形ベース -->
+  <circle cx="35" cy="35" r="35" fill="#3366CC" />
+  
+  <!-- 本/ノートの表現 -->
+  <path d="M20,20 L50,20 L50,50 L35,57 L20,50 Z" fill="white" />
+  
+  <!-- ノートの線 -->
+  <path d="M27,28 L43,28 M27,36 L43,36 M27,44 L43,44" stroke="#3366CC" stroke-width="2.5" stroke-linecap="round" />
+  
+  <!-- 重なる部分 -->
+  <path d="M25,15 L45,15 L45,20 L25,20 Z" fill="#FFFFFF" opacity="0.8" />
+</svg>
