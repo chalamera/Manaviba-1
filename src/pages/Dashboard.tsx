@@ -312,26 +312,45 @@ const Dashboard = () => {
 
   const redirectToStripeOnboarding = async (accountId: string) => {
     try {
+      setStripeLoading(true);
+      setError(null);
+
+      // Check network connectivity
+      if (!navigator.onLine) {
+        throw new Error('インターネット接続を確認してください');
+      }
+
       const response = await fetch(`${supabase.supabaseUrl}/functions/v1/create-account-link`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${supabase.supabaseKey}`,
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
         },
-        body: JSON.stringify({ accountId }),
+        body: JSON.stringify({ 
+          accountId,
+          origin: window.location.origin // Add origin for proper redirect URLs
+        }),
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to create account link');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Stripeアカウントの設定に失敗しました (${response.status})`);
       }
 
-      const { url } = await response.json();
-      window.location.href = url;
+      const data = await response.json();
+      
+      if (!data.url) {
+        throw new Error('Stripeアカウントの設定URLの取得に失敗しました');
+      }
+
+      // Use window.location.href for reliable redirection
+      window.location.href = data.url;
 
     } catch (error) {
       console.error('Error redirecting to Stripe:', error);
-      setError('Stripe登録ページへのリダイレクトに失敗しました');
+      setError(error instanceof Error ? error.message : 'Stripeアカウントの設定に失敗しました');
+      setStripeLoading(false);
     }
   };
 
@@ -703,6 +722,7 @@ const Dashboard = () => {
                         {`¥${order.note.price.toLocaleString()}`}
                       </p>
                     </div>
+                    
                     {order.note.file_url && (
                       <div className="flex flex-col sm:flex-row gap-2">
                         <button
