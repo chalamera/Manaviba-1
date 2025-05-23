@@ -349,21 +349,24 @@ const Dashboard = () => {
 
       if (!response.ok) {
         const errorData = await response.json();
-        const errorMessage = errorData.error || 'Failed to create Stripe account';
-        
-        if (errorMessage.includes('Your account must be activated')) {
-          throw new Error(
-            'Stripeアカウントを作成できませんでした。Stripeアカウントを有効にする必要があります。' +
-            '有効にするには、<a href="https://dashboard.stripe.com/account/onboarding" target="_blank" rel="noopener noreferrer" ' +
-            'class="text-purple-600 hover:text-purple-500 underline">Stripeダッシュボード</a>にアクセスしてください。'
-          );
-        }
-        
-        throw new Error(errorMessage);
+        throw new Error(errorData.error || 'Failed to create Stripe account');
       }
 
       const { accountId } = await response.json();
+      
+      // Update local state and database with the new account ID and pending status
       setStripeAccountId(accountId);
+      setStripeAccountStatus('pending');
+      
+      await supabase
+        .from('profiles')
+        .update({ 
+          stripe_account_id: accountId,
+          stripe_account_status: 'pending'
+        })
+        .eq('id', user.id);
+
+      // Proceed with onboarding
       await redirectToStripeOnboarding(accountId);
 
     } catch (error) {
