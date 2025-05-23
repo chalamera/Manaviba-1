@@ -6,58 +6,7 @@ import { Download, Star, ExternalLink, TrendingUp, CreditCard, Package, Shopping
 import RatingStars from '../components/RatingStars';
 import FileViewer from '../components/FileViewer';
 
-interface Note {
-  id: string;
-  title: string;
-  university: string;
-  subject: string;
-  price: number;
-  preview_url?: string;
-  preview_images?: string[];
-  file_url?: string;
-  seller_id: string;
-  created_at: string;
-}
-
-interface Order {
-  id: string;
-  note_id: string;
-  buyer_id: string;
-  payment_status: string;
-  created_at: string;
-  note: Note;
-}
-
-interface Rating {
-  id?: string;
-  note_id: string;
-  user_id: string;
-  rating: number;
-}
-
-interface Profile {
-  id: string;
-  username: string;
-  email: string;
-  stripe_account_id?: string;
-  stripe_account_status?: string;
-}
-
-interface ViewerState {
-  isOpen: boolean;
-  fileUrl: string;
-  fileName: string;
-}
-
-interface SalesSummary {
-  totalSales: number;
-  totalOrders: number;
-  notesSold: Array<{
-    note: Note;
-    count: number;
-    revenue: number;
-  }>;
-}
+// ... (keep all existing interfaces and type definitions)
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -180,6 +129,7 @@ const Dashboard = () => {
       const { status } = await response.json();
       setStripeAccountStatus(status);
 
+      // Update the status in the database
       await supabase
         .from('profiles')
         .update({ stripe_account_status: status })
@@ -331,10 +281,6 @@ const Dashboard = () => {
       setStripeLoading(true);
       setError(null);
 
-      if (!navigator.onLine) {
-        throw new Error('インターネット接続を確認してください');
-      }
-
       const response = await fetch(`${supabase.supabaseUrl}/functions/v1/create-connect-account`, {
         method: 'POST',
         headers: {
@@ -353,25 +299,12 @@ const Dashboard = () => {
       }
 
       const { accountId } = await response.json();
-      
-      // Update local state and database with the new account ID and pending status
       setStripeAccountId(accountId);
-      setStripeAccountStatus('pending');
-      
-      await supabase
-        .from('profiles')
-        .update({ 
-          stripe_account_id: accountId,
-          stripe_account_status: 'pending'
-        })
-        .eq('id', user.id);
-
-      // Proceed with onboarding
       await redirectToStripeOnboarding(accountId);
 
     } catch (error) {
       console.error('Error creating Stripe account:', error);
-      setError(error instanceof Error ? error.message : 'Stripeアカウントの作成に失敗しました');
+      setError('Stripeアカウントの作成に失敗しました');
     } finally {
       setStripeLoading(false);
     }
@@ -379,43 +312,26 @@ const Dashboard = () => {
 
   const redirectToStripeOnboarding = async (accountId: string) => {
     try {
-      setStripeLoading(true);
-      setError(null);
-
-      if (!navigator.onLine) {
-        throw new Error('インターネット接続を確認してください');
-      }
-
       const response = await fetch(`${supabase.supabaseUrl}/functions/v1/create-account-link`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${supabase.supabaseKey}`,
           'Content-Type': 'application/json',
-          'Accept': 'application/json',
         },
-        body: JSON.stringify({ 
-          accountId,
-          origin: window.location.origin
-        }),
+        body: JSON.stringify({ accountId }),
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `Stripeアカウントの設定に失敗しました (${response.status})`);
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create account link');
       }
 
-      const data = await response.json();
-      
-      if (!data.url) {
-        throw new Error('Stripeアカウントの設定URLの取得に失敗しました');
-      }
-
-      window.location.href = data.url;
+      const { url } = await response.json();
+      window.location.href = url;
 
     } catch (error) {
       console.error('Error redirecting to Stripe:', error);
-      setError(error instanceof Error ? error.message : 'Stripeアカウントの設定に失敗しました');
-      setStripeLoading(false);
+      setError('Stripe登録ページへのリダイレクトに失敗しました');
     }
   };
 
@@ -594,13 +510,6 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-xl flex items-start space-x-3 text-red-600">
-            <AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
-            <div dangerouslySetInnerHTML={{ __html: error }} className="flex-1" />
-          </div>
-        )}
-
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-6 mb-6 sm:mb-12">
           <div className="bg-white rounded-xl p-4 sm:p-6 shadow-sm hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between mb-3 sm:mb-4">
@@ -669,6 +578,13 @@ const Dashboard = () => {
             </button>
           </nav>
         </div>
+
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-xl flex items-center space-x-3 text-red-600">
+            <AlertCircle className="h-5 w-5 flex-shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
 
         {renderStripeConnectSection()}
 
@@ -787,7 +703,6 @@ const Dashboard = () => {
                         {`¥${order.note.price.toLocaleString()}`}
                       </p>
                     </div>
-                    
                     {order.note.file_url && (
                       <div className="flex flex-col sm:flex-row gap-2">
                         <button
