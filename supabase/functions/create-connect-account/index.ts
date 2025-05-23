@@ -6,10 +6,9 @@ const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY')!, {
   apiVersion: '2023-10-16',
 });
 
-// Create Supabase client with service role key
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL')!,
-  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, // Use service role key
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
   {
     auth: {
       autoRefreshToken: false,
@@ -25,7 +24,6 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, {
       status: 204,
@@ -34,7 +32,31 @@ serve(async (req) => {
   }
 
   try {
+    // First verify that the platform account is activated
+    try {
+      await stripe.accounts.retrieve('acct_default');
+    } catch (error) {
+      if (error.code === 'account_invalid') {
+        return new Response(
+          JSON.stringify({
+            error: 'Stripeアカウントを有効にする必要があります。有効にするには、<a href="https://dashboard.stripe.com/account/onboarding" target="_blank" rel="noopener noreferrer" class="text-purple-600 hover:text-purple-500 underline">Stripeダッシュボード</a>にアクセスしてください。'
+          }),
+          {
+            status: 400,
+            headers: {
+              ...corsHeaders,
+              'Content-Type': 'application/json',
+            },
+          }
+        );
+      }
+    }
+
     const { userId, email } = await req.json();
+
+    if (!userId || !email) {
+      throw new Error('ユーザーIDとメールアドレスは必須です');
+    }
 
     // Create Stripe Connect account
     const account = await stripe.accounts.create({
@@ -55,7 +77,7 @@ serve(async (req) => {
       },
     });
 
-    // Update user profile with Stripe account ID using service role
+    // Update user profile with Stripe account ID
     const { error: updateError } = await supabase
       .from('profiles')
       .update({
@@ -66,7 +88,7 @@ serve(async (req) => {
 
     if (updateError) {
       console.error('Error updating profile:', updateError);
-      throw new Error('Failed to update profile with Stripe account information');
+      throw new Error('プロフィールの更新に失敗しました');
     }
 
     return new Response(
@@ -80,10 +102,16 @@ serve(async (req) => {
     );
   } catch (error) {
     console.error('Error creating Connect account:', error);
+    
+    let errorMessage = 'Stripeアカウントの作成に失敗しました';
+    if (error instanceof Error) {
+      errorMessage = error.message;
+    }
+
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: errorMessage }),
       {
-        status: 500,
+        status: 400,
         headers: {
           ...corsHeaders,
           'Content-Type': 'application/json',
