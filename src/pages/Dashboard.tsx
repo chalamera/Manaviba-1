@@ -6,7 +6,58 @@ import { Download, Star, ExternalLink, TrendingUp, CreditCard, Package, Shopping
 import RatingStars from '../components/RatingStars';
 import FileViewer from '../components/FileViewer';
 
-// ... (keep all existing interfaces and type definitions)
+interface Note {
+  id: string;
+  title: string;
+  university: string;
+  subject: string;
+  price: number;
+  preview_url?: string;
+  preview_images?: string[];
+  file_url?: string;
+  seller_id: string;
+  created_at: string;
+}
+
+interface Order {
+  id: string;
+  note_id: string;
+  buyer_id: string;
+  payment_status: string;
+  created_at: string;
+  note: Note;
+}
+
+interface Rating {
+  id?: string;
+  note_id: string;
+  user_id: string;
+  rating: number;
+}
+
+interface Profile {
+  id: string;
+  username: string;
+  email: string;
+  stripe_account_id?: string;
+  stripe_account_status?: string;
+}
+
+interface ViewerState {
+  isOpen: boolean;
+  fileUrl: string;
+  fileName: string;
+}
+
+interface SalesSummary {
+  totalSales: number;
+  totalOrders: number;
+  notesSold: Array<{
+    note: Note;
+    count: number;
+    revenue: number;
+  }>;
+}
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -129,7 +180,6 @@ const Dashboard = () => {
       const { status } = await response.json();
       setStripeAccountStatus(status);
 
-      // Update the status in the database
       await supabase
         .from('profiles')
         .update({ stripe_account_status: status })
@@ -281,6 +331,10 @@ const Dashboard = () => {
       setStripeLoading(true);
       setError(null);
 
+      if (!navigator.onLine) {
+        throw new Error('インターネット接続を確認してください');
+      }
+
       const response = await fetch(`${supabase.supabaseUrl}/functions/v1/create-connect-account`, {
         method: 'POST',
         headers: {
@@ -295,7 +349,17 @@ const Dashboard = () => {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to create Stripe account');
+        const errorMessage = errorData.error || 'Failed to create Stripe account';
+        
+        if (errorMessage.includes('Your account must be activated')) {
+          throw new Error(
+            'Stripeアカウントを作成できませんでした。Stripeアカウントを有効にする必要があります。' +
+            '有効にするには、<a href="https://dashboard.stripe.com/account/onboarding" target="_blank" rel="noopener noreferrer" ' +
+            'class="text-purple-600 hover:text-purple-500 underline">Stripeダッシュボード</a>にアクセスしてください。'
+          );
+        }
+        
+        throw new Error(errorMessage);
       }
 
       const { accountId } = await response.json();
@@ -304,7 +368,7 @@ const Dashboard = () => {
 
     } catch (error) {
       console.error('Error creating Stripe account:', error);
-      setError('Stripeアカウントの作成に失敗しました');
+      setError(error instanceof Error ? error.message : 'Stripeアカウントの作成に失敗しました');
     } finally {
       setStripeLoading(false);
     }
@@ -315,7 +379,6 @@ const Dashboard = () => {
       setStripeLoading(true);
       setError(null);
 
-      // Check network connectivity
       if (!navigator.onLine) {
         throw new Error('インターネット接続を確認してください');
       }
@@ -329,7 +392,7 @@ const Dashboard = () => {
         },
         body: JSON.stringify({ 
           accountId,
-          origin: window.location.origin // Add origin for proper redirect URLs
+          origin: window.location.origin
         }),
       });
 
@@ -344,7 +407,6 @@ const Dashboard = () => {
         throw new Error('Stripeアカウントの設定URLの取得に失敗しました');
       }
 
-      // Use window.location.href for reliable redirection
       window.location.href = data.url;
 
     } catch (error) {
@@ -529,6 +591,13 @@ const Dashboard = () => {
           </div>
         </div>
 
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-xl flex items-start space-x-3 text-red-600">
+            <AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
+            <div dangerouslySetInnerHTML={{ __html: error }} className="flex-1" />
+          </div>
+        )}
+
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-6 mb-6 sm:mb-12">
           <div className="bg-white rounded-xl p-4 sm:p-6 shadow-sm hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between mb-3 sm:mb-4">
@@ -597,13 +666,6 @@ const Dashboard = () => {
             </button>
           </nav>
         </div>
-
-        {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-xl flex items-center space-x-3 text-red-600">
-            <AlertCircle className="h-5 w-5 flex-shrink-0" />
-            <span>{error}</span>
-          </div>
-        )}
 
         {renderStripeConnectSection()}
 
